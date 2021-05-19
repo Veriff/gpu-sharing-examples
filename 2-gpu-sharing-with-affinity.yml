@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-example
+spec:
+  # In this example lets run 5 pods for demo purposes.
+  #
+  # NB: aws g4 nodes can run maxium of 29 pods due networking limits,
+  # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-eni.html#AvailableIpPerENI
+  replicas: 5
+  selector:
+    matchLabels:
+      app: gpu-example
+  template:
+    metadata:
+      labels:
+        app: gpu-example
+    spec:
+      # Lets use affinity to make sure pod(s) in this deployment
+      # can be only assigned to nodes that are using g4dn.xlarge instance.
+      # This way we can be sure there is GPU available.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values:
+                - g4dn.xlarge
+      containers:
+      - name: gpu-example
+        image: eritikass/gpu-load-test
+        env:
+          # this will let cuda application know to use any GPU available
+          - name: NVIDIA_VISIBLE_DEVICES
+            value: all

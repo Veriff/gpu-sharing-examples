@@ -1,0 +1,129 @@
+---
+#
+# config maps that is holding the script that is run inside DaemonSet in all gpu nodes to set gpu memory
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: add-gpu-memory
+  namespace: kube-system
+data:
+  app.sh: |
+    #!/bin/bash
+    gpu_memory_value="15079Mi"
+    timeout 240 kubectl proxy &
+    sleep 3
+    curl --header "Content-Type: application/json-patch+json" \
+        --request PATCH \
+        --max-time 10 --retry 10 --retry-delay 2 \
+        --data "[{\"op\": \"add\", \"path\": \"/status/capacity/veriff.com~1gpu-memory\", \"value\": \"${gpu_memory_value}\"}]" \
+        "http://127.0.0.1:8001/api/v1/nodes/${K8S_NODE_NAME}/status"
+    echo " * ${gpu_memory_value} of gpu memory added to ${K8S_NODE_NAME}  (veriff.com/gpu-memory)"
+    sleep infinity
+
+---
+#
+# this DaemonSet will run in all g4dn.xlarge nodes and patching them to add them gpu memory custom resources
+#
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: add-gpu-memory
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: add-gpu-memory
+  template:
+    metadata:
+      labels:
+        name: add-gpu-memory
+    spec:
+      tolerations:
+        - key: "special"
+          operator: "Exists"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values:
+                - g4dn.xlarge
+      serviceAccountName: add-gpu-memory
+      containers:
+        - name: add-gpu-memory
+          image: bitnami/kubectl
+          resources:
+            limits:
+              cpu: 40m
+              memory: 50M
+            requests:
+              cpu: 1m
+              memory: 1M
+          volumeMounts:
+            - mountPath: /app.sh
+              name: code
+              readOnly: true
+              subPath: app.sh
+          command:
+            - bash
+            - /app.sh
+          env:
+            #
+            # this variable is used in script to patch nodes to know what node he is running
+            #
+            - name: "K8S_NODE_NAME"
+              valueFrom:
+                fieldRef:
+                  apiVersion: "v1"
+                  fieldPath: "spec.nodeName"
+      priorityClassName: system-node-critical
+      volumes:
+        - name: code
+          configMap:
+            name: add-gpu-memory
+#
+# rbac permissions used by daemonset to patch nodes
+#
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: add-gpu-memory
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: add-gpu-memory
+  namespace: kube-system
+rules:
+  - apiGroups:
+    - "*"
+    resources:
+    - nodes
+    verbs:
+    - get
+    - list
+  - apiGroups:
+    - "*"
+    resources:
+    - nodes/status
+    verbs:
+    - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: add-gpu-memory
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: add-gpu-memory
+subjects:
+  - kind: ServiceAccount
+    name: add-gpu-memory
+    namespace: kube-system

@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-example
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: gpu-example
+  template:
+    metadata:
+      labels:
+        app: gpu-example
+    spec:
+      containers:
+      - name: gpu-example
+        image: eritikass/gpu-load-test
+        env:
+          # this will let cuda application know to use any GPU available
+          - name: NVIDIA_VISIBLE_DEVICES
+            value: all
+        resources:
+          requests:
+            veriff.com/gpu-memory: 104Mi
+          limits:
+            veriff.com/gpu-memory: 104Mi
