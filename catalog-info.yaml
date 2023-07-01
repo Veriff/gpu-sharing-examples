@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1beta1
+kind: Component
+metadata:
+  name: gpu-sharing-examples
+  description: ''
+  annotations:
+    veriff.com/criticality: none
+    github.com/project-slug: Veriff/gpu-sharing-examples
+spec:
+  type: undefined
+  owner: undefined
+  lifecycle: undefined
